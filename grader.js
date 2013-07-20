@@ -24,8 +24,12 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
+var util = require('util');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var URLFILE_DEFAULT = "TBD";
+
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -66,14 +70,58 @@ var clone = function(fn) {
 };
 
 
+var coerce_url = function(url) {
+
+    return url;
+
+};
+
+var check_url = function(url, checksfile) {
+
+    var inurl = url.toString();
+    var inchecksfile = checksfile.toString();
+
+    var temp_file = "temp.html";
+
+    //console.log("func: URL: %s", inurl);
+    //console.log("func: checksfile: %s", inchecksfile);
+
+    rest.get(url).on('complete', function(result, url, checks) {
+
+	//console.log("In rest.get(): url: %s, checks: %s", inurl, inchecksfile);
+
+	if (result instanceof Error) {
+	    console.error('Error (%s): reading URL (%s), exiting.', result.message, inurl);
+	    process.exit(1); // http://nodejs.org/api/process.html#process_process_exit_code
+	} else {
+	    //console.error("Writing file: %s", "new_check_file.html");
+	    var str = util.format(result);
+	    fs.writeFileSync(temp_file, str);
+
+	    var checkJson = checkHtmlFile(temp_file, inchecksfile);
+	    var outJson = JSON.stringify(checkJson, null, 4);
+	    console.log(outJson);
+
+	    fs.unlinkSync(temp_file);
+	};
+    });
+
+};
+
+
 if (require.main == module) {
     program
 	.option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-	.option('-f, --file <html_file>', 'Path to index html', clone(assertFileExists), HTMLFILE_DEFAULT)
+	.option('-u, --url <url>', 'URL', clone(coerce_url), URLFILE_DEFAULT)
 	.parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+
+    //util.puts("Checks: " + program.checks);
+    //util.puts("URL: " + program.url);
+
+    //util.puts("check_file.html retrieved from URL: " + program.url);
+
+    check_url(program.url, program.checks.toString());
+
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
